@@ -59,7 +59,6 @@ bookmarkRouter
     const { id } = req.params;
     const bookmark = bookmarks.find(b => b.id == id)
   
-    // make sure we found a card
     if (!bookmark) {
       logger.error(`bookmark with id ${id} not found.`)
       return res
@@ -67,7 +66,7 @@ bookmarkRouter
         .send('bookmark Not Found')
     }
   
-    res.json(card)
+    res.json(bookmark)
   })
   .delete((req, res) => {
     const { id } = req.params
