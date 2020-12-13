@@ -7,6 +7,7 @@ const { NODE_ENV } = require('./config')
 const logger = require('./logger')
 const bookmarkRouter = require('./bookmarks/bookmarks-router')
 
+
 const app = express()
 
 const morganOption = (NODE_ENV === 'production')
@@ -32,7 +33,7 @@ app.use(function validateBearerToken(req, res, next) {
 app.use(bookmarkRouter)
 
 app.get('/', (req, res) => {
-    res.send('Hello, boilerplate!')
+    res.send('Hello, world!')
 })
 
 app.use(function errorHandler(error, req, res, next) {
