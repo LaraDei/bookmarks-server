@@ -1,6 +1,7 @@
 const express = require('express')
 const { v4: uuidv4 } = require('uuid')
 const logger = require('../logger')
+const xss = require('xss')
 const { bookmarks } = require('../store')
 const { isWebUri } = require('valid-url')
 const BookmarksService = require('./bookmarks-service')
@@ -10,9 +11,9 @@ const bodyParser = express.json()
 
 const serializeBookmark = bookmark => ({
   id: bookmark.id,
-  title: bookmark.title,
+  title:  xss(bookmark.title),
   url: bookmark.url,
-  description: bookmark.description,
+  description:  xss(bookmark.description),
   rating: Number(bookmark.rating),
 })
 
@@ -25,8 +26,9 @@ bookmarkRouter
       })
       .catch(next)
   })
-  .post(bodyParser, (req, res) => {
+  .post(bodyParser, (req, res, next) => {
     const { title, url, description, rating } = req.body
+    const ratingNum = Number(rating)
 
     for (const field of ['title', 'url', 'rating']) {
       if (!req.body[field]) {
@@ -45,24 +47,20 @@ bookmarkRouter
       return res.status(400).send(`'url' must be a valid URL`)
     }
 
-    const id = uuidv4()
+  const newBookmark = { title, url, description, rating }
 
-    const bookmark = {
-    id,
-    title,
-    url,
-    description,
-    rating
-    }
-
-    bookmarks.push(bookmark)
-
-    logger.info(`bookmark with id ${id} created`)
-
-    res
-    .status(201)
-    .location(`http://localhost:8000/bookmarks/${id}`)
-    .json(bookmark)
+  BookmarksService.insertBookmark(
+    req.app.get('db'),
+    newBookmark
+  )
+    .then(bookmark => {
+      logger.info(`Bookmark with id ${bookmark.id} created.`)
+      res
+        .status(201)
+        .location(`/bookmarks/${bookmark.id}`)
+        .json(serializeBookmark(bookmark))
+    })
+    .catch(next)
   })
 
 bookmarkRouter

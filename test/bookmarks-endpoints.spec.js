@@ -1,9 +1,9 @@
 const knex = require('knex')
-const {makeBookmarksArray} = require('./bookmark.fixtures')
+const {makeBookmarksArray, makeMaliciousBookmark} = require('./bookmark.fixtures')
 const app = require('../src/app')
 const store = require('../src/store')
 
-describe.only('Bookmarks Endpoints', () => {
+describe('Bookmarks Endpoints', () => {
   let db
 
   before('make knex instance', () => {
@@ -75,6 +75,26 @@ describe.only('Bookmarks Endpoints', () => {
           .expect(200, testBookmarks)
       })
     })
+    context(`Given an XSS attack bookmark`, () => {
+      const { maliciousBookmark, expectedBookmark } = makeMaliciousBookmark()
+
+      beforeEach('insert malicious bookmark', () => {
+        return db
+          .into('bookmarks')
+          .insert([maliciousBookmark])
+      })
+
+      it('removes XSS attack content', () => {
+        return supertest(app)
+          .get(`/bookmarks`)
+          .set('Authorization', `Bearer ${process.env.API_TOKEN}`)
+          .expect(200)
+          .expect(res => {
+            expect(res.body[0].title).to.eql(expectedBookmark.title)
+            expect(res.body[0].description).to.eql(expectedBookmark.description)
+          })
+      })
+    })
   })
 
   describe('GET /bookmarks/:id', () => {
@@ -105,6 +125,27 @@ describe.only('Bookmarks Endpoints', () => {
           .get(`/bookmarks/${bookmarkId}`)
           .set('Authorization', `Bearer ${process.env.API_TOKEN}`)
           .expect(200, expectedBookmark)
+      })
+    })
+
+    context(`Given an XSS attack bookmark`, () => {
+      const { maliciousBookmark, expectedBookmark } = makeMaliciousBookmark()
+
+      beforeEach('insert malicious bookmark', () => {
+        return db
+          .into('bookmarks')
+          .insert([maliciousBookmark])
+      })
+
+      it('removes XSS attack content', () => {
+        return supertest(app)
+          .get(`/bookmarks/${maliciousBookmark.id}`)
+          .set('Authorization', `Bearer ${process.env.API_TOKEN}`)
+          .expect(200)
+          .expect(res => {
+            expect(res.body.title).to.eql(expectedBookmark.title)
+            expect(res.body.description).to.eql(expectedBookmark.description)
+          })
       })
     })
   })
@@ -215,12 +256,30 @@ describe.only('Bookmarks Endpoints', () => {
           expect(res.body.url).to.eql(newBookmark.url)
           expect(res.body.description).to.eql(newBookmark.description)
           expect(res.body.rating).to.eql(newBookmark.rating)
-          expect(res.body.id).to.be.a('string')
+          expect(res.body).to.have.property('id')
+          expect(res.headers.location).to.eql(`/bookmarks/${res.body.id}`)
         })
-        .then(res => {
-          expect(store.bookmarks[store.bookmarks.length - 1]).to.eql(res.body)
+        .then(postRes  => {
+          supertest(app)
+            .get(`/bookmarks/${postRes.body.id}`)
+            .set('Authorization', `Bearer ${process.env.API_TOKEN}`)
+            .expect(postRes.body)
         })
     })
+
+    it('removes XSS attack content from response', () => {
+      const { maliciousBookmark, expectedBookmark } = makeMaliciousBookmark()
+      return supertest(app)
+        .post(`/bookmarks`)
+        .send(maliciousBookmark)
+        .set('Authorization', `Bearer ${process.env.API_TOKEN}`)
+        .expect(201)
+        .expect(res => {
+          expect(res.body.title).to.eql(expectedBookmark.title)
+          expect(res.body.description).to.eql(expectedBookmark.description)
+        })
+    })
+
   })
 
 })
