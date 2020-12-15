@@ -6,6 +6,7 @@ const { bookmarks } = require('../store')
 const { isWebUri } = require('valid-url')
 const BookmarksService = require('./bookmarks-service')
 
+const path = require('path')
 const bookmarkRouter = express.Router()
 const bodyParser = express.json()
 
@@ -18,7 +19,7 @@ const serializeBookmark = bookmark => ({
 })
 
 bookmarkRouter
-  .route('/bookmarks')
+  .route('/')
   .get((req, res, next) => {
     BookmarksService.getAllBookmarks(req.app.get('db'))
       .then(bookmarks => {
@@ -57,17 +58,20 @@ bookmarkRouter
       logger.info(`Bookmark with id ${bookmark.id} created.`)
       res
         .status(201)
-        .location(`/bookmarks/${bookmark.id}`)
+        .location(path.posix.join(req.originalUrl, `/${bookmark.id}`))
         .json(serializeBookmark(bookmark))
     })
     .catch(next)
   })
 
 bookmarkRouter
-  .route('/bookmarks/:id')
-  .get((req, res, next ) => {
+  .route('/:id')
+  .all((req, res, next ) => {
     const { id } = req.params;
-    BookmarksService.getById(req.app.get('db'), id)
+    BookmarksService.getById(
+      req.app.get('db'), 
+      id
+    )
       .then(bookmark => {
         if (!bookmark) {
           logger.error(`Bookmark with id ${id} not found.`)
@@ -75,29 +79,61 @@ bookmarkRouter
             error: { message: `Bookmark Not Found` }
           })
         }
-        res.json(serializeBookmark(bookmark))
+        res.bookmark = bookmark
+        next()
       })
       .catch(next)
   })
-  .delete((req, res) => {
+
+  .get((req, res, next) => {
+    res.json(serializeBookmark(res.bookmark))
+  })
+
+  .delete((req, res, next) => {
     const { id } = req.params
-  
-    const bookmarkIndex = bookmarks.findIndex(b => b.id == id)
-  
-    if (bookmarkIndex === -1) {
-      logger.error(`Bookmark with id ${id} not found.`)
-      return res
-        .status(404)
-        .send('Bookmark Not Found')
+    BookmarksService.deleteBookmark(
+      req.app.get('db'),
+      id
+    )
+      .then(numRowsAffected => {
+        logger.info(`Bookmark with id ${id} deleted.`)
+        res.status(204).end()
+      })
+      .catch(next)
+  })
+
+  .patch(bodyParser, (req, res, next) => {
+    const { title, url, description, rating } = req.body
+    const bookmarkToUpdate = {title, url, description, rating}
+
+    const numberOfValues = Object.values(bookmarkToUpdate).filter(Boolean).length
+    if (numberOfValues === 0) {
+     return res.status(400).json({
+       error: { message: `Request body must contain either 'title', 'url', 'description', or 'rating'` }
+     })
     }
 
-    bookmarks.splice(bookmarkIndex, 1)
-  
-    logger.info(`Bookmark with id ${id} deleted.`)
-  
-    res
-      .status(204)
-      .end()
+    if (bookmarkToUpdate.rating &&(!Number.isInteger(bookmarkToUpdate.rating) || bookmarkToUpdate.rating < 0 || bookmarkToUpdate.rating > 5)) {
+      logger.error(`Invalid rating '${bookmarkToUpdate.rating}' supplied`)
+      return res.status(400).send(`'rating' must be a number between 0 and 5`)
+    }
+
+    if (url && !isWebUri(url)) {
+      logger.error(`Invalid url '${url}' supplied`)
+      return res.status(400).send(`'url' must be a valid URL`)
+    }
+    
+
+    BookmarksService.updateBookmark(
+      req.app.get('db'),
+      req.params.id,
+      bookmarkToUpdate
+    )
+    .then(numRowsAffected  => {
+      res
+        .status(204).end()
+    })
+    .catch(next)
   })
 
 module.exports = bookmarkRouter
