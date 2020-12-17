@@ -104,7 +104,8 @@ bookmarkRouter
 
   .patch(bodyParser, (req, res, next) => {
     const { title, url, description, rating } = req.body
-    const bookmarkToUpdate = {title, url, description, rating}
+    const ratingNum = Number(rating)
+    const bookmarkToUpdate = {title, url, description, ratingNum}
 
     const numberOfValues = Object.values(bookmarkToUpdate).filter(Boolean).length
     if (numberOfValues === 0) {
@@ -113,8 +114,8 @@ bookmarkRouter
      })
     }
 
-    if (bookmarkToUpdate.rating &&(!Number.isInteger(bookmarkToUpdate.rating) || bookmarkToUpdate.rating < 0 || bookmarkToUpdate.rating > 5)) {
-      logger.error(`Invalid rating '${bookmarkToUpdate.rating}' supplied`)
+    if (bookmarkToUpdate.ratingNum &&(!Number.isInteger(bookmarkToUpdate.ratingNum) || bookmarkToUpdate.ratingNum < 0 || bookmarkToUpdate.ratingNum > 5)) {
+      logger.error(`Invalid rating '${bookmarkToUpdate.ratingNum}' supplied`)
       return res.status(400).send(`'rating' must be a number between 0 and 5`)
     }
 
